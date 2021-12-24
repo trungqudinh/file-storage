@@ -2,9 +2,13 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <regex>
 
 #include <websocketpp/config/asio.hpp>
 #include <websocketpp/server.hpp>
+
+#include <checksum_handler.hpp>
+#include <db_handler.hpp>
 
 typedef websocketpp::config::asio::message_type::ptr message_ptr;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> context_ptr;
@@ -18,6 +22,7 @@ using websocketpp::lib::placeholders::_2;
 struct connection_data {
     int sessionid;
     std::string name;
+    std::string user_id;
 };
 
 
@@ -43,8 +48,17 @@ public:
         server::connection_ptr con = m_server.get_con_from_hdl(hdl);
         std::string path = con->get_resource();
         auto curr_uri = con->get_uri();
+        auto query = curr_uri->get_query();
         std::cout << "Get resource from " << path << std::endl;
-        std::cout << "Get query " << curr_uri->get_query() << std::endl;
+        std::cout << "Get query " << query << std::endl;
+
+
+        regex regexp("[^,]*(user_id=[a-zA-z0-9]*)");
+        smatch m;
+        if (regex_search(query, m, regexp))
+        {
+            data.user_id = m[0];
+        }
 
         m_connections[hdl] = data;
     }
@@ -66,9 +80,26 @@ public:
         std::cout << "Receving file on hdl: " << hdl.lock().get()
             << std::endl;
 
-        std::ofstream fout("receive.dat", std::ios::out | std::ios::binary);
+        std::string file_path = "receive.dat";
+        std::ofstream fout(file_path, std::ios::out | std::ios::binary);
         fout.write(msg->get_payload().c_str(), msg->get_payload().size());
         fout.close();
+
+
+
+
+        char checksum[65];
+        sha256_file(file_path.c_str(), checksum);
+        Record rec;
+        rec.user_id = m_connections[hdl].user_id;
+        rec.request_id = "123";
+        rec.checksum = std::string(checksum);
+        rec.received_date = "25/12";
+        rec.file_name = file_path;
+
+        DatabaseIOStream dbs;
+        dbs.initialize();
+        dbs.insert({rec});
 
         try {
             m_server.send(hdl, "done", websocketpp::frame::opcode::text);

@@ -3,7 +3,7 @@ APPS = client server
 client_source = client.cpp
 server_source = server.cpp
 
-CXX = g++ -Wall -std=c++14 -Iwebsocketpp
+CXX = g++ -Wall -std=c++14 -Iwebsocketpp -Iinclude
 LIBS = -pthread -pthread -lssl -lcrypto
 DESTDIR = /usr/local/bin/
 BUILD_CMD = $(CXX) $(SOURCES) -o $(BINDIR)/$(APPS) $(LIBS)
