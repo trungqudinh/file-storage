@@ -16,6 +16,9 @@ typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> conte
 using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
 using websocketpp::lib::bind;
+class TlsVerification
+{
+public:
         bool verify_subject_alternative_name(const char * hostname, X509 * cert) {
             STACK_OF(GENERAL_NAME) * san_names = NULL;
 
@@ -89,26 +92,7 @@ using websocketpp::lib::bind;
 
             return preverified;
         }
-
-        context_ptr on_tls_init(const char * hostname, websocketpp::connection_hdl) {
-            context_ptr ctx = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23);
-
-            try {
-                ctx->set_options(boost::asio::ssl::context::default_workarounds |
-                        boost::asio::ssl::context::no_sslv2 |
-                        boost::asio::ssl::context::no_sslv3 |
-                        boost::asio::ssl::context::single_dh_use);
-
-                ctx->set_verify_mode(boost::asio::ssl::verify_none);
-                ctx->set_verify_callback(bind(&verify_certificate, hostname, ::_1, ::_2));
-                ctx->load_verify_file("server.pem");
-            } catch (std::exception& e) {
-                std::cout << e.what() << std::endl;
-            }
-            return ctx;
-        }
-
-
+};
 
 class connection_metadata {
     public:
@@ -153,6 +137,24 @@ class connection_metadata {
             } else {
                 m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
             }
+        }
+
+        context_ptr on_tls_init(websocketpp::connection_hdl) {
+            context_ptr ctx = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23);
+
+            try {
+                ctx->set_options(boost::asio::ssl::context::default_workarounds |
+                        boost::asio::ssl::context::no_sslv2 |
+                        boost::asio::ssl::context::no_sslv3 |
+                        boost::asio::ssl::context::single_dh_use);
+
+                ctx->set_verify_mode(boost::asio::ssl::verify_none);
+//                ctx->set_verify_callback(bind(&TlsVerification::verify_certificate, hostname, ::_1, ::_2));
+                ctx->load_verify_file("server.pem");
+            } catch (std::exception& e) {
+                std::cout << e.what() << std::endl;
+            }
+            return ctx;
         }
 
         websocketpp::connection_hdl get_hdl() const {
@@ -232,10 +234,26 @@ class websocket_endpoint {
             m_thread->join();
         }
 
+        context_ptr on_tls_init(websocketpp::connection_hdl) {
+            context_ptr ctx = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23);
+
+            try {
+                ctx->set_options(boost::asio::ssl::context::default_workarounds |
+                        boost::asio::ssl::context::no_sslv2 |
+                        boost::asio::ssl::context::no_sslv3 |
+                        boost::asio::ssl::context::single_dh_use);
+
+                ctx->set_verify_mode(boost::asio::ssl::verify_none);
+                ctx->load_verify_file("server.pem");
+            } catch (std::exception& e) {
+                std::cout << e.what() << std::endl;
+            }
+            return ctx;
+        }
         int connect(std::string const & uri) {
             websocketpp::lib::error_code ec;
 
-            m_endpoint.set_tls_init_handler(bind(&on_tls_init, uri.c_str(), ::_1));
+            m_endpoint.set_tls_init_handler(bind(&websocket_endpoint::on_tls_init, this, ::_1));
             client::connection_ptr con = m_endpoint.get_connection(uri, ec);
 
             if (ec) {
