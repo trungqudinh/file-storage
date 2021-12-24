@@ -24,9 +24,11 @@ struct connection_data {
 class print_server {
 public:
     print_server() : m_next_sessionid(1) {
+        m_server.set_error_channels(websocketpp::log::elevel::all);
         m_server.init_asio();
 
         m_server.set_tls_init_handler(bind(&print_server::on_tls_init,this, ::_1));
+        m_server.set_validate_handler(bind(&print_server::on_validate,this,::_1));
         m_server.set_open_handler(bind(&print_server::on_open,this,::_1));
         m_server.set_close_handler(bind(&print_server::on_close,this,::_1));
         m_server.set_message_handler(bind(&print_server::on_message,this,::_1,::_2));
@@ -37,6 +39,12 @@ public:
 
         data.sessionid = m_next_sessionid++;
         data.name.clear();
+
+        server::connection_ptr con = m_server.get_con_from_hdl(hdl);
+        std::string path = con->get_resource();
+        auto curr_uri = con->get_uri();
+        std::cout << "Get resource from " << path << std::endl;
+        std::cout << "Get query " << curr_uri->get_query() << std::endl;
 
         m_connections[hdl] = data;
     }
@@ -89,6 +97,24 @@ public:
 private:
     std::string get_password() {
         return "test";
+    }
+
+    bool on_validate(connection_hdl hdl) {
+        server::connection_ptr con = m_server.get_con_from_hdl(hdl);
+        std::string path = con->get_resource();
+        auto curr_uri = con->get_uri();
+        if (path.rfind("/client/ws?content-type=audio/x-raw,user_id=") != std::string::npos )
+        {
+            return true;
+        }
+        else
+        {
+            std::cout << "Got invalid " << path << std::endl;
+            auto ec = websocketpp::error::make_error_code(websocketpp::error::invalid_uri);
+            m_server.send(hdl, "Invalide URI. Try again", websocketpp::frame::opcode::text, ec);
+            m_server.send_http_response(hdl, ec);
+            return false;
+        }
     }
 
     context_ptr on_tls_init(websocketpp::connection_hdl hdl) {

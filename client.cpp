@@ -208,6 +208,7 @@ class websocket_endpoint {
         websocket_endpoint () : m_next_id(0) {
             m_endpoint.clear_access_channels(websocketpp::log::alevel::all);
             m_endpoint.clear_error_channels(websocketpp::log::elevel::all);
+            m_endpoint.set_error_channels(websocketpp::log::elevel::all);
 
             m_endpoint.init_asio();
             m_endpoint.start_perpetual();
@@ -254,10 +255,18 @@ class websocket_endpoint {
             }
             return ctx;
         }
+
+        void on_fail(websocketpp::connection_hdl hdl) {
+            client::connection_ptr con = m_endpoint.get_con_from_hdl(hdl);
+            std::cout << "Fail " << con->get_ec().message() << std::endl;
+        }
+
+
         int connect(std::string const & uri) {
             websocketpp::lib::error_code ec;
 
             m_endpoint.set_tls_init_handler(bind(&websocket_endpoint::on_tls_init, this, ::_1));
+            m_endpoint.set_fail_handler(bind(&websocket_endpoint::on_fail, this, ::_1));
             client::connection_ptr con = m_endpoint.get_connection(uri, ec);
 
             if (ec) {
