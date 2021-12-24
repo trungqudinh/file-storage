@@ -346,9 +346,19 @@ class websocket_endpoint {
             boost::trim(file_path);
             std::ifstream fin{file_path, std::ios::in | std::ios::binary};
             std::cout << "Reading:" << file_path << std::endl;
-            std::vector<char> bytes(
-                    (std::istreambuf_iterator<char>(fin)),
-                    (std::istreambuf_iterator<char>()));
+
+            std::istreambuf_iterator<char> it(fin);
+            std::istreambuf_iterator<char> end;
+
+            std::vector<char> bytes;
+            while(it != end) {
+                bytes.push_back(*it);
+                ++it;
+            }
+
+//            std::vector<char> bytes(
+//                    (std::istreambuf_iterator<char>(fin)),
+//                    (std::istreambuf_iterator<char>()));
             size_t size = bytes.size();
             char* buf = bytes.data();
             fin.close();
