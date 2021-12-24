@@ -51,16 +51,19 @@ public:
     }
 
     void on_message(connection_hdl hdl, message_ptr msg) {
-        std::cout << "on_message called with hdl: " << hdl.lock().get()
-            << " and message: " << msg->get_payload()
+//        std::cout << "on_message called with hdl: " << hdl.lock().get()
+//            << " and message: " << msg->get_payload()
+//            << std::endl;
+
+        std::cout << "Receving file on hdl: " << hdl.lock().get()
             << std::endl;
 
         std::ofstream fout("receive.dat", std::ios::out | std::ios::binary);
-        fout.write(msg->get_payload().c_str(), sizeof(msg->get_payload().c_str()));
+        fout.write(msg->get_payload().c_str(), msg->get_payload().size());
         fout.close();
 
         try {
-            m_server.send(hdl, "done", msg->get_opcode());
+            m_server.send(hdl, "done", websocketpp::frame::opcode::text);
         } catch (websocketpp::exception const & e) {
             std::cout << "Echo failed because: "
                 << "(" << e.what() << ")" << std::endl;

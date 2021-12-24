@@ -4,6 +4,8 @@
 #include <websocketpp/common/thread.hpp>
 #include <websocketpp/common/memory.hpp>
 
+#include <boost/algorithm/string.hpp>
+
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -152,7 +154,6 @@ class connection_metadata {
                         boost::asio::ssl::context::single_dh_use);
 
                 ctx->set_verify_mode(boost::asio::ssl::verify_none);
-//                ctx->set_verify_callback(bind(&TlsVerification::verify_certificate, hostname, ::_1, ::_2));
                 ctx->load_verify_file("server.pem");
             } catch (std::exception& e) {
                 std::cout << e.what() << std::endl;
@@ -342,31 +343,17 @@ class websocket_endpoint {
                 return;
             }
 
-            //std::ifstream fin{file_path.c_str(), std::ifstream::binary};
-            std::ifstream fin{file_path.c_str(), std::ios::binary};
-            std::vector<char> buffer (5 * 1024,0); //reads only the first 1024 bytes
-
-            std::cout << "Reading " << file_path << std::endl;
-//            while(!fin.eof())
-            {
-//                fin.read(buffer.data(), buffer.size());
-//                std::streamsize s=fin.gcount();
-            }
-
+            boost::trim(file_path);
+            std::ifstream fin{file_path, std::ios::in | std::ios::binary};
+            std::cout << "Reading:" << file_path << std::endl;
             std::vector<char> bytes(
                     (std::istreambuf_iterator<char>(fin)),
                     (std::istreambuf_iterator<char>()));
+            size_t size = bytes.size();
+            char* buf = bytes.data();
             fin.close();
-            //char* buf = &bytes[0];
-            //char* buf = bytes.data();
-            char buf[5 * 1024];
-            fin.read(buf, sizeof(buf));
-
-            std::cout << "Sending " << file_path << std::endl;
-//            m_endpoint->send(hdl, buffer, sizeof(buffer), websocketpp::frame::opcode::binary);
-            m_endpoint.send(metadata_it->second->get_hdl(), buf, sizeof(buf), websocketpp::frame::opcode::binary, ec);
-
-//            m_endpoint.send(metadata_it->second->get_hdl(), message, websocketpp::frame::opcode::text, ec);
+            std::cout << "Sending:" << file_path << " with size " << size << std::endl;
+            m_endpoint.send(metadata_it->second->get_hdl(), buf, size, websocketpp::frame::opcode::binary, ec);
 
             if (ec) {
                 std::cout << "> Error sending message: " << ec.message() << std::endl;
