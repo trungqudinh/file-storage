@@ -8,6 +8,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <fstream>
 #include <sstream>
 
 typedef websocketpp::client<websocketpp::config::asio_tls_client> client;
@@ -134,8 +135,10 @@ class connection_metadata {
         void on_message(websocketpp::connection_hdl, client::message_ptr msg) {
             if (msg->get_opcode() == websocketpp::frame::opcode::text) {
                 m_messages.push_back("<< " + msg->get_payload());
+                std::cout << "Received text from server: " << msg->get_payload();
             } else {
                 m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
+                std::cout << "Received hex from server: " << websocketpp::utility::to_hex(msg->get_payload());
             }
         }
 
@@ -310,6 +313,7 @@ class websocket_endpoint {
             }
         }
 
+        /*
         void send(int id, std::string message) {
             websocketpp::lib::error_code ec;
 
@@ -326,6 +330,48 @@ class websocket_endpoint {
             }
 
             metadata_it->second->record_sent_message(message);
+        }
+        */
+
+        void send(int id, std::string file_path) {
+            websocketpp::lib::error_code ec;
+
+            con_list::iterator metadata_it = m_connection_list.find(id);
+            if (metadata_it == m_connection_list.end()) {
+                std::cout << "> No connection found with id " << id << std::endl;
+                return;
+            }
+
+            //std::ifstream fin{file_path.c_str(), std::ifstream::binary};
+            std::ifstream fin{file_path.c_str(), std::ios::binary};
+            std::vector<char> buffer (5 * 1024,0); //reads only the first 1024 bytes
+
+            std::cout << "Reading " << file_path << std::endl;
+//            while(!fin.eof())
+            {
+//                fin.read(buffer.data(), buffer.size());
+//                std::streamsize s=fin.gcount();
+            }
+
+            std::vector<char> bytes(
+                    (std::istreambuf_iterator<char>(fin)),
+                    (std::istreambuf_iterator<char>()));
+            fin.close();
+            //char* buf = &bytes[0];
+            //char* buf = bytes.data();
+            char buf[5 * 1024];
+            fin.read(buf, sizeof(buf));
+
+            std::cout << "Sending " << file_path << std::endl;
+//            m_endpoint->send(hdl, buffer, sizeof(buffer), websocketpp::frame::opcode::binary);
+            m_endpoint.send(metadata_it->second->get_hdl(), buf, sizeof(buf), websocketpp::frame::opcode::binary, ec);
+
+//            m_endpoint.send(metadata_it->second->get_hdl(), message, websocketpp::frame::opcode::text, ec);
+
+            if (ec) {
+                std::cout << "> Error sending message: " << ec.message() << std::endl;
+                return;
+            }
         }
 
         connection_metadata::ptr get_metadata(int id) const {

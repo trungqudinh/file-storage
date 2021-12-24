@@ -1,4 +1,5 @@
 #include <exception>
+#include <fstream>
 #include <iostream>
 #include <map>
 
@@ -54,8 +55,12 @@ public:
             << " and message: " << msg->get_payload()
             << std::endl;
 
+        std::ofstream fout("receive.dat", std::ios::out | std::ios::binary);
+        fout.write(msg->get_payload().c_str(), sizeof(msg->get_payload().c_str()));
+        fout.close();
+
         try {
-            m_server.send(hdl, msg->get_payload(), msg->get_opcode());
+            m_server.send(hdl, "done", msg->get_opcode());
         } catch (websocketpp::exception const & e) {
             std::cout << "Echo failed because: "
                 << "(" << e.what() << ")" << std::endl;
