@@ -13,7 +13,7 @@ all: $(APPS)
 $(BINDIR):
 	mkdir -p $(BINDIR)
 
-$(APPS): SOURCES = $($@_source)
+$(APPS): SOURCES = $@/$($@_source)
 $(APPS): $(BINDIR)
 	@echo BUILDING $@
 	$(CXX) $(SOURCES) -o $(BINDIR)/$@ $(LIBS)

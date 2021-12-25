@@ -96,14 +96,13 @@ public:
     {
         close();
     }
-    DatabaseIOStream(DatabaseIOStream const&) = delete;             // Copy construct
-    DatabaseIOStream(DatabaseIOStream&&) = delete;                  // Move construct
-    DatabaseIOStream& operator=(DatabaseIOStream const&) = delete;  // Copy assign
-    DatabaseIOStream& operator=(DatabaseIOStream &&) = delete;      // Move assign
+
+    DatabaseIOStream(DatabaseIOStream const&) = delete;
+    DatabaseIOStream(DatabaseIOStream&&) = delete;
+    DatabaseIOStream& operator=(DatabaseIOStream const&) = delete;
+    DatabaseIOStream& operator=(DatabaseIOStream &&) = delete;
 private:
-    DatabaseIOStream()
-    {
-    }
+    DatabaseIOStream() = default;
     string file_name = "database.db";
     bool is_open = false;
     std::ofstream fout_;
