@@ -26,9 +26,27 @@ typedef map<string, Records> UserBasedRecords;
 class DatabaseIOStream
 {
 public:
+    static DatabaseIOStream& Instance() {
+        static DatabaseIOStream instance;
+        return instance;
+    }
+
     void initialize()
     {
-        fout_.open(file_name, std::ios_base::app);
+        if (!is_open)
+        {
+            fout_.open(file_name, std::ios_base::app);
+            is_open = true;
+        }
+    }
+
+    void close()
+    {
+        if (is_open)
+        {
+            fout_.close();
+            is_open = false;
+        }
     }
 
     void insert(Records records)
@@ -76,10 +94,18 @@ public:
 
     ~DatabaseIOStream()
     {
-        fout_.close();
+        close();
     }
+    DatabaseIOStream(DatabaseIOStream const&) = delete;             // Copy construct
+    DatabaseIOStream(DatabaseIOStream&&) = delete;                  // Move construct
+    DatabaseIOStream& operator=(DatabaseIOStream const&) = delete;  // Copy assign
+    DatabaseIOStream& operator=(DatabaseIOStream &&) = delete;      // Move assign
 private:
+    DatabaseIOStream()
+    {
+    }
     string file_name = "database.db";
+    bool is_open = false;
     std::ofstream fout_;
     std::ifstream fin_;
 };

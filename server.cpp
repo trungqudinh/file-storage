@@ -70,6 +70,7 @@ public:
         if (regex_search(query, m, regexp))
         {
             data.user_id = m[0];
+            data.user_id = data.user_id.substr(data.user_id.find("=") + 1);
         }
 
         m_connections[hdl] = data;
@@ -106,7 +107,7 @@ public:
         rec.received_date = get_current_time();
         rec.file_name = data.file_name;
 
-        static DatabaseIOStream dbs;
+        DatabaseIOStream& dbs = DatabaseIOStream::Instance();
         dbs.initialize();
         dbs.insert({rec});
 
