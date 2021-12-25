@@ -10,6 +10,7 @@
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/serialization/string.hpp>
+#include <boost/filesystem.hpp>
 
 #include <websocketpp/config/asio.hpp>
 #include <websocketpp/server.hpp>
@@ -17,6 +18,8 @@
 #include <checksum_handler.hpp>
 #include <db_handler.hpp>
 #include <transfering_package.hpp>
+
+#include <utility.hpp>
 
 typedef websocketpp::config::asio::message_type::ptr message_ptr;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> context_ptr;
@@ -100,21 +103,21 @@ public:
 
 
 
-        char checksum[65];
-        sha256_file(file_path.c_str(), checksum);
         Record rec;
         rec.user_id = m_connections[hdl].user_id;
-        rec.request_id = "123";
-        rec.checksum = std::string(checksum);
-        rec.received_date = "25/12";
-        rec.file_name = file_path;
+        rec.request_id = data.request_id;;
+        rec.checksum = get_checksum_from_file(file_path);
+        rec.received_date = get_current_time();
+        rec.file_name = data.file_name;
 
         DatabaseIOStream dbs;
         dbs.initialize();
         dbs.insert({rec});
 
+        auto file_size = boost::filesystem::file_size(boost::filesystem::path(file_path));
+
         try {
-            m_server.send(hdl, "done", websocketpp::frame::opcode::text);
+            m_server.send(hdl, "done with file size: " + std::to_string(file_size) + " bytes", websocketpp::frame::opcode::text);
         } catch (websocketpp::exception const & e) {
             std::cout << "Echo failed because: "
                 << "(" << e.what() << ")" << std::endl;

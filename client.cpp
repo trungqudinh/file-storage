@@ -4,6 +4,7 @@
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/serialization/string.hpp>
+#include <boost/filesystem.hpp>
 
 #include <websocketpp/config/asio_client.hpp>
 #include <websocketpp/client.hpp>
@@ -12,6 +13,10 @@
 #include <websocketpp/common/memory.hpp>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include <cstdlib>
 #include <iostream>
@@ -21,6 +26,7 @@
 #include <sstream>
 
 #include <transfering_package.hpp>
+#include <utility.hpp>
 
 typedef websocketpp::client<websocketpp::config::asio_tls_client> client;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> context_ptr;
@@ -31,6 +37,12 @@ using websocketpp::lib::bind;
 
 using std::cout;
 using std::endl;
+
+std::string generator_uuid()
+{
+    static boost::uuids::uuid uuid = boost::uuids::random_generator()();
+    return boost::lexical_cast<std::string>(uuid);
+}
 
 class TlsVerification
 {
@@ -385,7 +397,13 @@ class websocket_endpoint {
 //            char* buf = bytes.data();
             fin.close();
 
-            TransferingPackage data{"req_id=12345465", std::move(bytes)};
+            TransferingPackage data;
+            data.user_id = "123456";
+            data.request_id = generator_uuid();
+            data.checksum = get_checksum_from_file(file_path);
+            data.file_name = boost::filesystem::path(file_path).filename().string();
+            data.data = std::move(bytes);
+
             RawDataBuffer sent_data = TransferingPackage::serialize(data);
             std::cout << "Sending:" << file_path << " with size " << sent_data.size() << std::endl;
             m_endpoint.send(metadata_it->second->get_hdl(), sent_data, websocketpp::frame::opcode::binary, ec);

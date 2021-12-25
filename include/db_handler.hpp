@@ -10,13 +10,14 @@
 
 using namespace std;
 
+static const string NULL_VALUE = "NULL";
 struct Record
 {
-    string user_id;
-    string checksum;
-    string request_id;
-    string received_date;
-    string file_name;
+    string user_id = NULL_VALUE;
+    string checksum = NULL_VALUE;
+    string request_id = NULL_VALUE;
+    string received_date = NULL_VALUE;
+    string file_name = NULL_VALUE;
 };
 
 typedef vector<Record> Records;
