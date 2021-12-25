@@ -4,11 +4,19 @@
 #include <map>
 #include <regex>
 
+#include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/iostreams/device/array.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/serialization/string.hpp>
+
 #include <websocketpp/config/asio.hpp>
 #include <websocketpp/server.hpp>
 
 #include <checksum_handler.hpp>
 #include <db_handler.hpp>
+#include <transfering_package.hpp>
 
 typedef websocketpp::config::asio::message_type::ptr message_ptr;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> context_ptr;
@@ -80,9 +88,27 @@ public:
         std::cout << "Receving file on hdl: " << hdl.lock().get()
             << std::endl;
 
+        std::vector<char> recevied_data(msg->get_payload().begin(), msg->get_payload().end());
+
+        std::cout << "Deserialize" << std::endl;
+
+        TransferingPackage data;
+        boost::iostreams::array_source source{recevied_data.data(), recevied_data.size()};
+
+        std::cout << "Break 1" << std::endl;
+
+        boost::iostreams::stream<boost::iostreams::array_source> is{source};
+        std::cout << "Break 2" << std::endl;
+        boost::archive::binary_iarchive in_archive(is);
+        std::cout << "Break 3" << std::endl;
+        in_archive >> data;
+
+        std::cout << data.request_id << std::endl;
+
         std::string file_path = "receive.dat";
         std::ofstream fout(file_path, std::ios::out | std::ios::binary);
-        fout.write(msg->get_payload().c_str(), msg->get_payload().size());
+//        fout.write(msg->get_payload().c_str(), msg->get_payload().size());
+        fout.write(data.data.data(), data.data.size());
         fout.close();
 
 

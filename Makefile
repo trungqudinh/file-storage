@@ -4,7 +4,7 @@ client_source = client.cpp
 server_source = server.cpp
 
 CXX = g++ -Wall -std=c++14 -Iwebsocketpp -Iinclude
-LIBS = -pthread -pthread -lssl -lcrypto
+LIBS = -pthread -pthread -lssl -lcrypto -lboost_serialization -lboost_iostreams
 DESTDIR = /usr/local/bin/
 BUILD_CMD = $(CXX) $(SOURCES) -o $(BINDIR)/$(APPS) $(LIBS)
 

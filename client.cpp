@@ -1,3 +1,10 @@
+#include <boost/archive/binary_iarchive.hpp>
+#include <boost/archive/binary_oarchive.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
+#include <boost/iostreams/device/array.hpp>
+#include <boost/iostreams/stream.hpp>
+#include <boost/serialization/string.hpp>
+
 #include <websocketpp/config/asio_client.hpp>
 #include <websocketpp/client.hpp>
 
@@ -13,12 +20,18 @@
 #include <fstream>
 #include <sstream>
 
+#include <transfering_package.hpp>
+
 typedef websocketpp::client<websocketpp::config::asio_tls_client> client;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> context_ptr;
 
 using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
 using websocketpp::lib::bind;
+
+using std::cout;
+using std::endl;
+
 class TlsVerification
 {
 public:
@@ -368,11 +381,35 @@ class websocket_endpoint {
 //            std::vector<char> bytes(
 //                    (std::istreambuf_iterator<char>(fin)),
 //                    (std::istreambuf_iterator<char>()));
-            size_t size = bytes.size();
-            char* buf = bytes.data();
+//            size_t size = bytes.size();
+//            char* buf = bytes.data();
             fin.close();
+
+            TransferingPackage data{"req_id=12345465", std::move(bytes)};
+            std::vector<char> v;
+            boost::iostreams::back_insert_device<std::vector<char>> sink{v};
+            boost::iostreams::stream<boost::iostreams::back_insert_device<std::vector<char>>> os{sink};
+            boost::archive::binary_oarchive out_archive(os);
+            out_archive << data;
+
+            size_t size = v.size();
+            char* buf = v.data();
+
+            client::connection_ptr con = m_endpoint.get_con_from_hdl(metadata_it->second->get_hdl());
+            client::message_ptr msg = con->get_message(websocketpp::frame::opcode::binary, size);
+            cout <<  "Set payload \n";
+//            cout << buf << endl;
+            msg->set_payload(buf, size);
+//            cout <<  "Set opcode \n";
+//            msg->set_opcode(websocketpp::frame::opcode::binary);
+            cout <<  "Set header \n";
+            msg->set_header("req_id=12345");
+
+            ec = con->send(msg);
+
             std::cout << "Sending:" << file_path << " with size " << size << std::endl;
-            m_endpoint.send(metadata_it->second->get_hdl(), buf, size, websocketpp::frame::opcode::binary, ec);
+            //cout << buf << endl;
+//            m_endpoint.send(metadata_it->second->get_hdl(), buf, size, websocketpp::frame::opcode::binary, ec);
 
             if (ec) {
                 std::cout << "> Error sending message: " << ec.message() << std::endl;
