@@ -406,7 +406,9 @@ class websocket_endpoint {
 
             RawDataBuffer sent_data = TransferingPackage::serialize(data);
             std::cout << "Sending:" << file_path << " with size " << sent_data.size() << std::endl;
-            m_endpoint.send(metadata_it->second->get_hdl(), sent_data, websocketpp::frame::opcode::binary, ec);
+            auto&& hdl = metadata_it->second->get_hdl();
+            hdl.lock();
+            m_endpoint.send(hdl, sent_data, websocketpp::frame::opcode::binary, ec);
 
             if (ec) {
                 std::cout << "> Error sending message: " << ec.message() << std::endl;
@@ -433,7 +435,31 @@ class websocket_endpoint {
         int m_next_id;
 };
 
-int main() {
+int main(int argc, char **argv)
+{
+    if (argc < 3)
+    {
+        std::cerr << "Invalid input" << std::endl;
+        return 1;
+    }
+    std::string uri = argv[1];
+    std::string file_path = argv[2];
+
+    websocket_endpoint endpoint;
+    int id = endpoint.connect(uri);
+    if (-1 == id)
+    {
+        std::cerr << "Fail to connect to " << uri << std::endl;
+        return 1;
+    }
+    std::cout << "> Created connection with uri " << uri << " id = " << id << std::endl;
+    connection_metadata::ptr metadata = endpoint.get_metadata(id);
+    while (metadata->get_status() != "Open")
+    {
+    }
+    std::cout << *(endpoint.get_metadata(id)) << std::endl;
+    endpoint.send(0, file_path);
+    /*
     bool done = false;
     std::string input;
     websocket_endpoint endpoint;
@@ -495,6 +521,7 @@ int main() {
             std::cout << "> Unrecognized Command" << std::endl;
         }
     }
+    */
 
     return 0;
 }
