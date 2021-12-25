@@ -43,6 +43,10 @@ std::string generator_uuid()
     static boost::uuids::uuid uuid = boost::uuids::random_generator()();
     return boost::lexical_cast<std::string>(uuid);
 }
+void wait_a_bit()
+{
+     sleep(1);
+}
 
 class TlsVerification
 {
@@ -456,6 +460,7 @@ int main(int argc, char **argv)
     connection_metadata::ptr metadata = endpoint.get_metadata(id);
     while (metadata->get_status() != "Open")
     {
+        wait_a_bit();
     }
     std::cout << *(endpoint.get_metadata(id)) << std::endl;
     endpoint.send(0, file_path);

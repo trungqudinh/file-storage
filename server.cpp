@@ -20,6 +20,7 @@
 #include <transfering_package.hpp>
 
 #include <utility.hpp>
+#include <storage_handler.hpp>
 
 typedef websocketpp::config::asio::message_type::ptr message_ptr;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> context_ptr;
@@ -87,37 +88,41 @@ public:
         std::cout << "Receving file on hdl: " << hdl.lock().get()
             << std::endl;
 
-
         std::cout << "Deserialize" << std::endl;
-
         TransferingPackage data = TransferingPackage::deserialize(msg->get_payload());
+        StorageHandler storage_handler;
+        storage_handler.storing_path = "data/";
 
         std::cout << data.request_id << std::endl;
 
-        std::string file_path = "receive.dat";
-        std::ofstream fout(file_path, std::ios::out | std::ios::binary);
-//        fout.write(msg->get_payload().c_str(), msg->get_payload().size());
-        fout.write(data.data.data(), data.data.size());
-        fout.close();
+        auto const stored_file = storage_handler.store(data.checksum, data.data, true);
 
-
-
+        bool checksum_matched = (stored_file.second == data.checksum);
 
         Record rec;
         rec.user_id = m_connections[hdl].user_id;
-        rec.request_id = data.request_id;;
-        rec.checksum = get_checksum_from_file(file_path);
+        rec.request_id = data.request_id;
+        rec.checksum = data.checksum;
         rec.received_date = get_current_time();
         rec.file_name = data.file_name;
 
-        DatabaseIOStream dbs;
+        static DatabaseIOStream dbs;
         dbs.initialize();
         dbs.insert({rec});
 
-        auto file_size = boost::filesystem::file_size(boost::filesystem::path(file_path));
+        auto file_size = boost::filesystem::file_size(boost::filesystem::path(stored_file.first));
 
         try {
-            m_server.send(hdl, "done with file size: " + std::to_string(file_size) + " bytes", websocketpp::frame::opcode::text);
+            if (checksum_matched)
+            {
+                std::cout << "Stored at " << stored_file.first << std::endl;
+                m_server.send(hdl, "Received successful. File size = " + std::to_string(file_size) + " bytes", websocketpp::frame::opcode::text);
+            }
+            else
+            {
+                std::cout << "Checksum of " << stored_file.first << " not matched" << std::endl;
+                m_server.send(hdl, "Checksum not matched. File size = " + std::to_string(file_size) + " bytes", websocketpp::frame::opcode::text);
+            }
         } catch (websocketpp::exception const & e) {
             std::cout << "Echo failed because: "
                 << "(" << e.what() << ")" << std::endl;
