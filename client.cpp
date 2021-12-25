@@ -386,30 +386,9 @@ class websocket_endpoint {
             fin.close();
 
             TransferingPackage data{"req_id=12345465", std::move(bytes)};
-            std::vector<char> v;
-            boost::iostreams::back_insert_device<std::vector<char>> sink{v};
-            boost::iostreams::stream<boost::iostreams::back_insert_device<std::vector<char>>> os{sink};
-            boost::archive::binary_oarchive out_archive(os);
-            out_archive << data;
-
-            size_t size = v.size();
-            char* buf = v.data();
-
-            client::connection_ptr con = m_endpoint.get_con_from_hdl(metadata_it->second->get_hdl());
-            client::message_ptr msg = con->get_message(websocketpp::frame::opcode::binary, size);
-            cout <<  "Set payload \n";
-//            cout << buf << endl;
-            msg->set_payload(buf, size);
-//            cout <<  "Set opcode \n";
-//            msg->set_opcode(websocketpp::frame::opcode::binary);
-            cout <<  "Set header \n";
-            msg->set_header("req_id=12345");
-
-            ec = con->send(msg);
-
-            std::cout << "Sending:" << file_path << " with size " << size << std::endl;
-            //cout << buf << endl;
-//            m_endpoint.send(metadata_it->second->get_hdl(), buf, size, websocketpp::frame::opcode::binary, ec);
+            RawDataBuffer sent_data = TransferingPackage::serialize(data);
+            std::cout << "Sending:" << file_path << " with size " << sent_data.size() << std::endl;
+            m_endpoint.send(metadata_it->second->get_hdl(), sent_data, websocketpp::frame::opcode::binary, ec);
 
             if (ec) {
                 std::cout << "> Error sending message: " << ec.message() << std::endl;

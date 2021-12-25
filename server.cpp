@@ -81,27 +81,13 @@ public:
     }
 
     void on_message(connection_hdl hdl, message_ptr msg) {
-//        std::cout << "on_message called with hdl: " << hdl.lock().get()
-//            << " and message: " << msg->get_payload()
-//            << std::endl;
-
         std::cout << "Receving file on hdl: " << hdl.lock().get()
             << std::endl;
 
-        std::vector<char> recevied_data(msg->get_payload().begin(), msg->get_payload().end());
 
         std::cout << "Deserialize" << std::endl;
 
-        TransferingPackage data;
-        boost::iostreams::array_source source{recevied_data.data(), recevied_data.size()};
-
-        std::cout << "Break 1" << std::endl;
-
-        boost::iostreams::stream<boost::iostreams::array_source> is{source};
-        std::cout << "Break 2" << std::endl;
-        boost::archive::binary_iarchive in_archive(is);
-        std::cout << "Break 3" << std::endl;
-        in_archive >> data;
+        TransferingPackage data = TransferingPackage::deserialize(msg->get_payload());
 
         std::cout << data.request_id << std::endl;
 
