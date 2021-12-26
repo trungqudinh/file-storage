@@ -1,6 +1,7 @@
 #pragma once
 #include <checksum_handler.hpp>
 #include <cstring>
+#include <jsoncpp/json/json.h>
 
 std::string get_checksum_from_file(const std::string& file_path)
 {
@@ -20,4 +21,22 @@ std::string get_current_time()
 
     strftime(buffer,sizeof(buffer),"%Y-%m-%d_%H:%M:%S",timeinfo);
     return std::string(buffer);
+}
+
+template<typename CONTAINER>
+Json::Value make_json_array(
+        const CONTAINER& container,
+        std::function<Json::Value(const typename CONTAINER::value_type&)> function
+        ) {
+    Json::Value array = Json::arrayValue;
+    int i = 0;
+    for (const auto& element : container) {
+        array[i++] = function(element);
+    }
+    return array;
+}
+
+template<typename CONTAINER>
+Json::Value make_json_array(const CONTAINER& container) {
+    return make_json_array(container, [](const typename CONTAINER::value_type& value){return Json::Value(value);});
 }

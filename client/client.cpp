@@ -173,6 +173,7 @@ class connection_metadata {
 //                m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
 //                std::cout << "Received hex from server: " << websocketpp::utility::to_hex(msg->get_payload());
             }
+            waiting_message = false;
         }
 
         context_ptr on_tls_init(websocketpp::connection_hdl) {
@@ -208,10 +209,21 @@ class connection_metadata {
             m_messages.push_back(">> " + message);
         }
 
+        void wait_message()
+        {
+            waiting_message = true;
+        }
+
+        bool is_waiting_message()
+        {
+            return waiting_message;
+        }
+
         friend std::ostream & operator<< (std::ostream & out, connection_metadata const & data);
     private:
         int m_id;
         websocketpp::connection_hdl m_hdl;
+        bool waiting_message = false;
         std::string m_status;
         std::string m_uri;
         std::string m_server;
@@ -421,9 +433,24 @@ class websocket_endpoint {
             return websocketpp::lib::error_code();
         }
 
-        void send_file(const int id, std::string file_path)
+        void send_file(const int& id, std::vector<std::string> file_paths)
+        {
+            for (auto const& file : file_paths)
+            {
+                send_file(id, file);
+            }
+        }
+
+        void send_file(const int& id, std::string file_path)
         {
             boost::trim(file_path);
+            struct stat buffer;
+            if (stat(file_path.c_str(), &buffer) != 0)
+            {
+                log_error("File " + file_path + "does not exist" );
+                return;
+            }
+
             std::ifstream fin{file_path, std::ios::in | std::ios::binary};
             std::cout << "Reading:" << file_path << std::endl;
 
@@ -457,6 +484,15 @@ class websocket_endpoint {
             }
         }
 
+        void wait_for_respond(int id)
+        {
+            get_metadata(id)->wait_message();
+            while (get_metadata(id)->is_waiting_message())
+            {
+                wait_a_bit();
+            }
+        }
+
     private:
         typedef std::map<int,connection_metadata::ptr> con_list;
 
@@ -475,8 +511,23 @@ int main(int argc, char **argv)
         return 1;
     }
     std::string uri = argv[1];
-    std::string file_path = argv[2];
+    std::vector<std::string> file_paths;
 
+    bool request_files_list = 0;
+
+    for(int i = 2; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--files") == 0)
+        {
+            request_files_list = true;
+        }
+        else
+        {
+            file_paths.emplace_back(argv[i]);
+        }
+    }
+
+    /*
     std::string query = uri.substr(uri.rfind("?") + 1);
     static auto request_info = [](const std::string& query) -> bool
     {
@@ -494,6 +545,7 @@ int main(int argc, char **argv)
     };
 
     bool has_request_info = request_info(query);
+    */
 
     websocket_endpoint endpoint;
     int id = endpoint.connect(uri);
@@ -508,11 +560,12 @@ int main(int argc, char **argv)
     {
         wait_a_bit();
     }
-    if (has_request_info)
-    {
-        endpoint.send_message(0, "FILES_LIST");
-    }
     std::cout << *(endpoint.get_metadata(id)) << std::endl;
-    endpoint.send_file(0, file_path);
+    if (request_files_list)
+    {
+        endpoint.send_message(id, "FILES_LIST");
+        endpoint.wait_for_respond(id);
+    }
+    endpoint.send_file(id, file_paths);
     return 0;
 }

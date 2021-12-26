@@ -65,8 +65,13 @@ public:
 
             if (used_buffer_)
             {
-                records[record.user_id][record.checksum][record.file_name].emplace_back(record);
+                buffer_[record.user_id][record.checksum][record.file_name].emplace_back(record);
             }
+            inserted_record_++;
+        }
+        if (inserted_record_ > buffer_sync_limit_)
+        {
+            reload_buffer();
         }
     }
 
@@ -95,19 +100,20 @@ public:
                 cout << "Error on read data" << endl;
                 break;
             }
-            records[record.user_id][record.checksum][record.file_name].emplace_back(std::move(record));
+            records[record.user_id][record.checksum][record.file_name].emplace_back(record);
         }
         fin_.close();
         return records;
     }
 
-    RecordsFilter get_buffer() const {
+    const RecordsFilter& get_buffer() const {
         return buffer_;
     }
 
     void reload_buffer()
     {
         buffer_ = select_all();
+
         used_buffer_ = true;
     }
 
@@ -126,6 +132,8 @@ private:
     bool is_open = false;
     bool used_buffer_ = false;
     RecordsFilter buffer_;
+    int buffer_sync_limit_ = 10;
+    int inserted_record_ = 0;
     std::ofstream fout_;
     std::ifstream fin_;
 };

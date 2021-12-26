@@ -22,6 +22,7 @@
 
 #include <utility.hpp>
 #include <storage_handler.hpp>
+#include <jsoncpp/json/json.h>
 
 typedef websocketpp::config::asio::message_type::ptr message_ptr;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> context_ptr;
@@ -108,6 +109,7 @@ public:
             std::string request = msg->get_payload();
             if (request == "FILES_LIST")
             {
+                log_info("Send file list to user_id=" +  m_connections[hdl].user_id);
                 send_respond_message(get_stored_files(m_connections[hdl].user_id));
             }
         }
@@ -138,18 +140,26 @@ public:
 
     std::string get_stored_files(const std::string& user_id)
     {
-        std::ostringstream oss;
-        oss << "{";
-        std::set<std::string> file_names;
-        for (const auto& record : DatabaseIOStream::Instance().get_buffer()[user_id])
+        try
         {
-            if (file_names.emplace(record.checksum + record.file_name).second)
+            Json::Value root;
+            auto& container = root["files"];
+            container = Json::Value(Json::arrayValue);
+            int i = 0;
+            for(auto const& checksum : DatabaseIOStream::Instance().get_buffer().at(user_id))
             {
-                oss << record.file_name << std::endl;
+                for (const auto& file_name : checksum.second)
+                {
+                    log_info("Adding " + file_name.first +" " + file_name.second.front().file_size + " " + checksum.first);
+                    container[i++] = make_json_array<std::vector<std::string>>({file_name.first, file_name.second.front().file_size, checksum.first});
+                }
             }
+            return root.toStyledString();
         }
-        oss << "}";
-        return oss.str();
+        catch (std::out_of_range const&)
+        {
+            return "{files:[]}";
+        }
     }
 
     void handle_upload_request(const connection_hdl& hdl, const TransferingPackage& received_package)
