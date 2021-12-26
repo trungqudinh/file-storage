@@ -18,10 +18,12 @@ struct Record
     string request_id = NULL_VALUE;
     string received_date = NULL_VALUE;
     string file_name = NULL_VALUE;
+    string file_size = NULL_VALUE;
 };
 
 typedef vector<Record> Records;
 typedef map<string, Records> UserBasedRecords;
+typedef map<string, map<string, map<string, Records> > > RecordsFilter;
 
 class DatabaseIOStream
 {
@@ -35,7 +37,7 @@ public:
     {
         if (!is_open)
         {
-            fout_.open(file_name, std::ios_base::app);
+            fout_.open(database_file_name, std::ios_base::app);
             is_open = true;
         }
     }
@@ -49,16 +51,22 @@ public:
         }
     }
 
-    void insert(Records records)
+    void insert(const Records& records)
     {
-        for(const auto& rec : records)
+        for(const auto& record : records)
         {
-            fout_ << rec.user_id
-                << " " << rec.checksum
-                << " " << rec.request_id
-                << " " << rec.received_date
-                << " " << rec.file_name
-                << " " << endl;
+            fout_ << record.user_id
+                << " " << record.checksum
+                << " " << record.request_id
+                << " " << record.received_date
+                << " " << record.file_name
+                << " " << record.file_size
+                << endl;
+
+            if (used_buffer_)
+            {
+                records[record.user_id][record.checksum][record.file_name].emplace_back(record);
+            }
         }
     }
 
@@ -67,10 +75,10 @@ public:
         //
     }
 
-    UserBasedRecords select_all()
+    RecordsFilter select_all()
     {
-        UserBasedRecords records;
-        fin_.open(file_name);
+        RecordsFilter records;
+        fin_.open(database_file_name);
 
         string line;
         while (std::getline(fin_, line))
@@ -81,15 +89,26 @@ public:
                         >> record.checksum
                         >> record.request_id
                         >> record.received_date
-                        >> record.file_name))
+                        >> record.file_name
+                        >> record.file_size))
             {
                 cout << "Error on read data" << endl;
                 break;
             }
-            records[record.user_id].emplace_back(std::move(record));
+            records[record.user_id][record.checksum][record.file_name].emplace_back(std::move(record));
         }
         fin_.close();
         return records;
+    }
+
+    RecordsFilter get_buffer() const {
+        return buffer_;
+    }
+
+    void reload_buffer()
+    {
+        buffer_ = select_all();
+        used_buffer_ = true;
     }
 
     ~DatabaseIOStream()
@@ -103,8 +122,10 @@ public:
     DatabaseIOStream& operator=(DatabaseIOStream &&) = delete;
 private:
     DatabaseIOStream() = default;
-    string file_name = "database.db";
+    string database_file_name = "database.db";
     bool is_open = false;
+    bool used_buffer_ = false;
+    RecordsFilter buffer_;
     std::ofstream fout_;
     std::ifstream fin_;
 };

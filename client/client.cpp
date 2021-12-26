@@ -166,8 +166,7 @@ class connection_metadata {
             if (msg->get_opcode() == websocketpp::frame::opcode::TEXT)
             {
 //                m_messages.push_back("<< " + msg->get_payload());
-//                std::cout << "[Server respond] " << msg->get_payload();
-                log_info("Server respond: " + "\n" + msg->get_payload());
+                std::cout << "> [Server respond] \n" << msg->get_payload() << std::endl;
             }
             else
             {

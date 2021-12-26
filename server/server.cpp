@@ -1,3 +1,4 @@
+#include <set>
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -49,6 +50,7 @@ public:
         m_server.set_open_handler(bind(&print_server::on_open,this,::_1));
         m_server.set_close_handler(bind(&print_server::on_close,this,::_1));
         m_server.set_message_handler(bind(&print_server::on_message,this,::_1,::_2));
+        DatabaseIOStream::Instance().reload_buffer();
     }
 
     void on_open(connection_hdl hdl) {
@@ -103,6 +105,11 @@ public:
 
         if (msg->get_opcode() == websocketpp::frame::opcode::TEXT)
         {
+            std::string request = msg->get_payload();
+            if (request == "FILES_LIST")
+            {
+                send_respond_message(get_stored_files(m_connections[hdl].user_id));
+            }
         }
 
         if (msg->get_opcode() == websocketpp::frame::opcode::BINARY)
@@ -129,9 +136,20 @@ public:
         }
     }
 
-    void handle_files_list_requests(const connection_hdl& hdl)
+    std::string get_stored_files(const std::string& user_id)
     {
-        vector<std::string> files;
+        std::ostringstream oss;
+        oss << "{";
+        std::set<std::string> file_names;
+        for (const auto& record : DatabaseIOStream::Instance().get_buffer()[user_id])
+        {
+            if (file_names.emplace(record.checksum + record.file_name).second)
+            {
+                oss << record.file_name << std::endl;
+            }
+        }
+        oss << "}";
+        return oss.str();
     }
 
     void handle_upload_request(const connection_hdl& hdl, const TransferingPackage& received_package)
@@ -142,7 +160,7 @@ public:
         log_info("Request id = " + received_package.request_id);
 
         auto const stored_file = storage_handler.store(received_package.checksum, received_package.data, true);
-
+        auto stored_file_size = boost::filesystem::file_size(boost::filesystem::path(stored_file.first));
         bool checksum_matched = (stored_file.second == received_package.checksum);
 
         Record rec;
@@ -151,23 +169,23 @@ public:
         rec.checksum = received_package.checksum;
         rec.received_date = get_current_time();
         rec.file_name = received_package.file_name;
+        rec.file_size = std::to_string(stored_file_size);
 
         DatabaseIOStream& dbs = DatabaseIOStream::Instance();
         dbs.initialize();
         dbs.insert({rec});
 
-        auto file_size = boost::filesystem::file_size(boost::filesystem::path(stored_file.first));
 
         try {
             if (checksum_matched)
             {
                 log_info("[user_id=" + rec.user_id + "] Stored sent file at " + stored_file.first);
-                m_server.send(hdl, "Received successful. File size = " + std::to_string(file_size) + " bytes", websocketpp::frame::opcode::text);
+                m_server.send(hdl, "Received successful. File size = " + rec.file_size + " bytes", websocketpp::frame::opcode::text);
             }
             else
             {
                 log_info("[user_id=" + rec.user_id + "] checksum of file " + stored_file.first + " does not matched");
-                m_server.send(hdl, "Checksum not matched. File size = " + std::to_string(file_size) + " bytes", websocketpp::frame::opcode::text);
+                m_server.send(hdl, "Checksum not matched. File size = " + rec.file_size + " bytes", websocketpp::frame::opcode::text);
             }
         } catch (websocketpp::exception const & e) {
             std::cout << "Echo failed because: "
