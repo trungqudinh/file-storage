@@ -26,3 +26,5 @@ deb:
 
 install:
 	install -m 0755 $(BINDIR)/$(APPS) $(DESTDIR)
+
+.PHONY: $(APPS)

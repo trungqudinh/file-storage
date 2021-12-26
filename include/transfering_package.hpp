@@ -9,7 +9,7 @@ using RawDataBuffer = std::string;
 
 struct TransferingPackage
 {
-    std::string action = "UPLOAD";
+    std::string request_type = "UPLOAD";
     std::string user_id;
     std::string request_id;
     std::string checksum;
@@ -19,7 +19,7 @@ struct TransferingPackage
     template<class Archive>
     void serialize(Archive & ar, const unsigned int)
     {
-        ar & action;
+        ar & request_type;
         ar & user_id;
         ar & request_id;
         ar & checksum;

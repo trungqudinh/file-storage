@@ -163,12 +163,16 @@ class connection_metadata {
         }
 
         void on_message(websocketpp::connection_hdl, client::message_ptr msg) {
-            if (msg->get_opcode() == websocketpp::frame::opcode::text) {
-                m_messages.push_back("<< " + msg->get_payload());
-                std::cout << "Server respond: " << msg->get_payload();
-            } else {
-                m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
-                std::cout << "Received hex from server: " << websocketpp::utility::to_hex(msg->get_payload());
+            if (msg->get_opcode() == websocketpp::frame::opcode::TEXT)
+            {
+//                m_messages.push_back("<< " + msg->get_payload());
+//                std::cout << "[Server respond] " << msg->get_payload();
+                log_info("Server respond: " + "\n" + msg->get_payload());
+            }
+            else
+            {
+//                m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
+//                std::cout << "Received hex from server: " << websocketpp::utility::to_hex(msg->get_payload());
             }
         }
 
@@ -362,35 +366,64 @@ class websocket_endpoint {
             }
         }
 
-        /*
-        void send(int id, std::string message) {
+        websocketpp::lib::error_code send_message(int id, const std::string& message) {
             websocketpp::lib::error_code ec;
 
             con_list::iterator metadata_it = m_connection_list.find(id);
             if (metadata_it == m_connection_list.end()) {
                 std::cout << "> No connection found with id " << id << std::endl;
-                return;
+                return make_error_code(websocketpp::error::bad_connection);
             }
 
-            m_endpoint.send(metadata_it->second->get_hdl(), message, websocketpp::frame::opcode::text, ec);
+            m_endpoint.send(metadata_it->second->get_hdl(), message, websocketpp::frame::opcode::TEXT, ec);
             if (ec) {
                 std::cout << "> Error sending message: " << ec.message() << std::endl;
-                return;
+                return ec;
             }
 
-            metadata_it->second->record_sent_message(message);
+            //metadata_it->second->record_sent_message(message);
+            return websocketpp::lib::error_code();
         }
-        */
 
-        void send(int id, std::string file_path) {
+        websocketpp::lib::error_code send_package(int id, TransferingPackage package)
+        {
             websocketpp::lib::error_code ec;
 
             con_list::iterator metadata_it = m_connection_list.find(id);
             if (metadata_it == m_connection_list.end()) {
                 std::cout << "> No connection found with id " << id << std::endl;
-                return;
+                return make_error_code(websocketpp::error::bad_connection);
             }
 
+            const auto hdl = metadata_it->second->get_hdl();
+
+            static auto parse_user_id = [](const std::string& query) -> std::string
+            {
+                std::ostringstream user_id;
+                auto&& it = query.begin();
+                it += query.find("user_id=") + std::string("user_id=").length();
+                for ( ; it != query.end() && *it != ','; ++it)
+                {
+                    user_id << *it;
+                }
+                return user_id.str();
+            };
+            package.user_id = parse_user_id(m_endpoint.get_con_from_hdl(hdl)->get_uri()->get_query());
+            RawDataBuffer sent_data = TransferingPackage::serialize(package);
+            std::cout << "> [user_id=" << package.user_id << "] Sending package" << " with size " << sent_data.size() << std::endl;
+
+            m_endpoint.send(hdl, sent_data, websocketpp::frame::opcode::BINARY, ec);
+            if (ec) {
+                log_error("[user_id=" + package.user_id + "] Package sending failure");
+                std::cout << "> Error sending data: " << ec.message() << std::endl;
+                return ec;
+            }
+
+            return websocketpp::lib::error_code();
+        }
+
+        void send_file(const int id, std::string file_path)
+        {
             boost::trim(file_path);
             std::ifstream fin{file_path, std::ios::in | std::ios::binary};
             std::cout << "Reading:" << file_path << std::endl;
@@ -404,30 +437,16 @@ class websocket_endpoint {
                 ++it;
             }
 
-//            std::vector<char> bytes(
-//                    (std::istreambuf_iterator<char>(fin)),
-//                    (std::istreambuf_iterator<char>()));
-//            size_t size = bytes.size();
-//            char* buf = bytes.data();
             fin.close();
 
             TransferingPackage data;
-            data.user_id = "123456";
+            data.user_id = "";
             data.request_id = generator_uuid();
             data.checksum = get_checksum_from_file(file_path);
             data.file_name = boost::filesystem::path(file_path).filename().string();
             data.data = std::move(bytes);
 
-            RawDataBuffer sent_data = TransferingPackage::serialize(data);
-            std::cout << "Sending:" << file_path << " with size " << sent_data.size() << std::endl;
-            auto&& hdl = metadata_it->second->get_hdl();
-            hdl.lock();
-            m_endpoint.send(hdl, sent_data, websocketpp::frame::opcode::binary, ec);
-
-            if (ec) {
-                std::cout << "> Error sending message: " << ec.message() << std::endl;
-                return;
-            }
+            send_package(id, data);
         }
 
         connection_metadata::ptr get_metadata(int id) const {
@@ -459,6 +478,24 @@ int main(int argc, char **argv)
     std::string uri = argv[1];
     std::string file_path = argv[2];
 
+    std::string query = uri.substr(uri.rfind("?") + 1);
+    static auto request_info = [](const std::string& query) -> bool
+    {
+        std::string key = "info=1";
+        size_t pos = query.rfind(key);
+        if (pos != std::string::npos)
+        {
+            size_t end_pos = pos + key.length();
+            if (end_pos >= query.length() || query[end_pos] == ',')
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    bool has_request_info = request_info(query);
+
     websocket_endpoint endpoint;
     int id = endpoint.connect(uri);
     if (-1 == id)
@@ -466,13 +503,17 @@ int main(int argc, char **argv)
         std::cerr << "Fail to connect to " << uri << std::endl;
         return 1;
     }
-    std::cout << "> Created connection with uri " + uri + " id = " + std::to_string(id) << std::endl;;
+    std::cout << "> Created connection with uri " + uri + " id = " + std::to_string(id) << std::endl;
     connection_metadata::ptr metadata = endpoint.get_metadata(id);
     while (metadata->get_status() != "Open")
     {
         wait_a_bit();
     }
+    if (has_request_info)
+    {
+        endpoint.send_message(0, "FILES_LIST");
+    }
     std::cout << *(endpoint.get_metadata(id)) << std::endl;
-    endpoint.send(0, file_path);
+    endpoint.send_file(0, file_path);
     return 0;
 }

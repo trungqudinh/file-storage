@@ -94,25 +94,63 @@ public:
     }
 
     void on_message(connection_hdl hdl, message_ptr msg) {
-        log_info("Receving file from userid=" + m_connections[hdl].user_id);
-        log_info("Deserialize");
+        log_info("Receving message from userid=" + m_connections[hdl].user_id);
 
-        TransferingPackage data = TransferingPackage::deserialize(msg->get_payload());
+        static auto send_respond_message = [this, &hdl](const std::string& respond_msg)
+        {
+            m_server.send(hdl, respond_msg, websocketpp::frame::opcode::TEXT);
+        };
+
+        if (msg->get_opcode() == websocketpp::frame::opcode::TEXT)
+        {
+        }
+
+        if (msg->get_opcode() == websocketpp::frame::opcode::BINARY)
+        {
+            log_info("Deserialize");
+
+            TransferingPackage received_package = TransferingPackage::deserialize(msg->get_payload());
+
+            if (received_package.request_type == "UPLOAD")
+            {
+                handle_upload_request(hdl, received_package);
+            }
+            else if (received_package.request_type == "INFO")
+            {
+                std::string respond_msg = "[user_id=" + m_connections[hdl].user_id + "] Received request: " + received_package.request_type;
+                send_respond_message(respond_msg);
+            }
+            else
+            {
+                std::string respond_msg = "[user_id=" + m_connections[hdl].user_id + "] Unrecognized request: " + received_package.request_type;
+                log_error(respond_msg);
+                send_respond_message(respond_msg);
+            }
+        }
+    }
+
+    void handle_files_list_requests(const connection_hdl& hdl)
+    {
+        vector<std::string> files;
+    }
+
+    void handle_upload_request(const connection_hdl& hdl, const TransferingPackage& received_package)
+    {
         StorageHandler storage_handler;
         storage_handler.storing_path = "data/";
 
-        log_info("Request id = " + data.request_id);
+        log_info("Request id = " + received_package.request_id);
 
-        auto const stored_file = storage_handler.store(data.checksum, data.data, true);
+        auto const stored_file = storage_handler.store(received_package.checksum, received_package.data, true);
 
-        bool checksum_matched = (stored_file.second == data.checksum);
+        bool checksum_matched = (stored_file.second == received_package.checksum);
 
         Record rec;
         rec.user_id = m_connections[hdl].user_id;
-        rec.request_id = data.request_id;
-        rec.checksum = data.checksum;
+        rec.request_id = received_package.request_id;
+        rec.checksum = received_package.checksum;
         rec.received_date = get_current_time();
-        rec.file_name = data.file_name;
+        rec.file_name = received_package.file_name;
 
         DatabaseIOStream& dbs = DatabaseIOStream::Instance();
         dbs.initialize();
