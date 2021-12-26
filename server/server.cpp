@@ -61,9 +61,7 @@ public:
         std::string path = con->get_resource();
         auto curr_uri = con->get_uri();
         auto query = curr_uri->get_query();
-        std::cout << "Get resource from " << path << std::endl;
-        std::cout << "Get query " << query << std::endl;
-
+        log_info("Get connection query " + query);
 
         regex regexp("[^,]*(user_id=[a-zA-z0-9]*)");
         smatch m;
@@ -85,16 +83,25 @@ public:
         m_connections.erase(hdl);
     }
 
-    void on_message(connection_hdl hdl, message_ptr msg) {
-        std::cout << "Receving file on hdl: " << hdl.lock().get()
-            << std::endl;
+    void log_info(const std::string& msg)
+    {
+        m_server.get_elog().write(websocketpp::log::elevel::info, msg);
+    }
 
-        std::cout << "Deserialize" << std::endl;
+    void log_error(const std::string& msg)
+    {
+        m_server.get_elog().write(websocketpp::log::elevel::info, msg);
+    }
+
+    void on_message(connection_hdl hdl, message_ptr msg) {
+        log_info("Receving file from userid=" + m_connections[hdl].user_id);
+        log_info("Deserialize");
+
         TransferingPackage data = TransferingPackage::deserialize(msg->get_payload());
         StorageHandler storage_handler;
         storage_handler.storing_path = "data/";
 
-        std::cout << data.request_id << std::endl;
+        log_info("Request id = " + data.request_id);
 
         auto const stored_file = storage_handler.store(data.checksum, data.data, true);
 
@@ -116,12 +123,12 @@ public:
         try {
             if (checksum_matched)
             {
-                std::cout << "Stored at " << stored_file.first << std::endl;
+                log_info("[user_id=" + rec.user_id + "] Stored sent file at " + stored_file.first);
                 m_server.send(hdl, "Received successful. File size = " + std::to_string(file_size) + " bytes", websocketpp::frame::opcode::text);
             }
             else
             {
-                std::cout << "Checksum of " << stored_file.first << " not matched" << std::endl;
+                log_info("[user_id=" + rec.user_id + "] checksum of file " + stored_file.first + " does not matched");
                 m_server.send(hdl, "Checksum not matched. File size = " + std::to_string(file_size) + " bytes", websocketpp::frame::opcode::text);
             }
         } catch (websocketpp::exception const & e) {
@@ -161,7 +168,7 @@ private:
         }
         else
         {
-            std::cout << "Got invalid " << path << std::endl;
+            log_info("Received invalid URI: " + path);
             auto ec = websocketpp::error::make_error_code(websocketpp::error::invalid_uri);
             m_server.send(hdl, "Invalide URI. Try again", websocketpp::frame::opcode::text, ec);
             m_server.send_http_response(hdl, ec);
@@ -172,7 +179,8 @@ private:
     context_ptr on_tls_init(websocketpp::connection_hdl hdl) {
         namespace asio = websocketpp::lib::asio;
 
-        std::cout << "on_tls_init called with hdl: " << hdl.lock().get() << std::endl;
+        log_info("[on_tls_init] called: ");
+        std::cout << hdl.lock().get();
 
         context_ptr ctx = websocketpp::lib::make_shared<asio::ssl::context>(asio::ssl::context::sslv23);
 

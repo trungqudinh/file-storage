@@ -137,7 +137,6 @@ class connection_metadata {
               , m_uri(uri)
               , m_server("N/A")
     {}
-
         void on_open(client * c, websocketpp::connection_hdl hdl) {
             m_status = "Open";
 
@@ -166,7 +165,7 @@ class connection_metadata {
         void on_message(websocketpp::connection_hdl, client::message_ptr msg) {
             if (msg->get_opcode() == websocketpp::frame::opcode::text) {
                 m_messages.push_back("<< " + msg->get_payload());
-                std::cout << "Received text from server: " << msg->get_payload();
+                std::cout << "Server respond: " << msg->get_payload();
             } else {
                 m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
                 std::cout << "Received hex from server: " << websocketpp::utility::to_hex(msg->get_payload());
@@ -185,7 +184,7 @@ class connection_metadata {
                 ctx->set_verify_mode(boost::asio::ssl::verify_none);
                 ctx->load_verify_file("server.pem");
             } catch (std::exception& e) {
-                std::cout << e.what() << std::endl;
+                std::cerr << e.what() << std::endl;
             }
             return ctx;
         }
@@ -268,6 +267,17 @@ class websocket_endpoint {
             m_thread->join();
         }
 
+        void log_info(const std::string& msg)
+        {
+            m_endpoint.get_elog().write(websocketpp::log::elevel::info, msg);
+        }
+
+        void log_error(const std::string& msg)
+        {
+            m_endpoint.get_elog().write(websocketpp::log::elevel::info, msg);
+        }
+
+
         context_ptr on_tls_init(websocketpp::connection_hdl) {
             context_ptr ctx = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23);
 
@@ -280,7 +290,7 @@ class websocket_endpoint {
                 ctx->set_verify_mode(boost::asio::ssl::verify_none);
                 ctx->load_verify_file("server.pem");
             } catch (std::exception& e) {
-                std::cout << e.what() << std::endl;
+                std::cerr << e.what() << std::endl;
             }
             return ctx;
         }
@@ -456,7 +466,7 @@ int main(int argc, char **argv)
         std::cerr << "Fail to connect to " << uri << std::endl;
         return 1;
     }
-    std::cout << "> Created connection with uri " << uri << " id = " << id << std::endl;
+    std::cout << "> Created connection with uri " + uri + " id = " + std::to_string(id) << std::endl;;
     connection_metadata::ptr metadata = endpoint.get_metadata(id);
     while (metadata->get_status() != "Open")
     {
@@ -464,69 +474,5 @@ int main(int argc, char **argv)
     }
     std::cout << *(endpoint.get_metadata(id)) << std::endl;
     endpoint.send(0, file_path);
-    /*
-    bool done = false;
-    std::string input;
-    websocket_endpoint endpoint;
-
-    while (!done) {
-        std::cout << "Enter Command: ";
-        std::getline(std::cin, input);
-
-        if (input == "quit") {
-            done = true;
-        } else if (input == "help") {
-            std::cout
-                << "\nCommand List:\n"
-                << "connect <ws uri>\n"
-                << "send <connection id> <message>\n"
-                << "close <connection id> [<close code:default=1000>] [<close reason>]\n"
-                << "show <connection id>\n"
-                << "help: Display this help text\n"
-                << "quit: Exit the program\n"
-                << std::endl;
-        } else if (input.substr(0,7) == "connect") {
-            int id = endpoint.connect(input.substr(8));
-            if (id != -1) {
-                std::cout << "> Created connection with id " << id << std::endl;
-            }
-        } else if (input.substr(0,4) == "send") {
-            std::stringstream ss(input);
-
-            std::string cmd;
-            int id;
-            std::string message;
-
-            ss >> cmd >> id;
-            std::getline(ss,message);
-
-            endpoint.send(id, message);
-        } else if (input.substr(0,5) == "close") {
-            std::stringstream ss(input);
-
-            std::string cmd;
-            int id;
-            int close_code = websocketpp::close::status::normal;
-            std::string reason;
-
-            ss >> cmd >> id >> close_code;
-            std::getline(ss,reason);
-
-            endpoint.close(id, close_code, reason);
-        } else if (input.substr(0,4) == "show") {
-            int id = atoi(input.substr(5).c_str());
-
-            connection_metadata::ptr metadata = endpoint.get_metadata(id);
-            if (metadata) {
-                std::cout << *metadata << std::endl;
-            } else {
-                std::cout << "> Unknown connection id " << id << std::endl;
-            }
-        } else {
-            std::cout << "> Unrecognized Command" << std::endl;
-        }
-    }
-    */
-
     return 0;
 }
