@@ -156,31 +156,27 @@ public:
     }
 
     std::string get_stored_files(const std::string& user_id)
-
     {
-        try
+        Json::Value root;
+        auto& container = root["files"];
+        container = Json::Value(Json::arrayValue);
 
+        try
         {
-            Json::Value root;
-            auto& container = root["files"];
-            container = Json::Value(Json::arrayValue);
             int i = 0;
             for(auto const& checksum : DatabaseIOStream::Instance().get_buffer().at(user_id))
-
             {
                 for (const auto& file_name : checksum.second)
-
                 {
-                    log_info("Adding " + file_name.first +" " + file_name.second.front().file_size + " " + checksum.first);
+//                    log_info("Adding " + file_name.first +" " + file_name.second.front().file_size + " " + checksum.first);
                     container[i++] = make_json_array<std::vector<std::string>>({file_name.first, file_name.second.front().file_size, checksum.first});
                 }
             }
             return root.toStyledString();
         }
         catch (std::out_of_range const&)
-
         {
-            return "{files:[]}";
+            return root.toStyledString();
         }
     }
 
@@ -244,6 +240,7 @@ public:
 
     void run(uint16_t port)
     {
+        log_info("Start to listen on port " + std::to_string(port));
         m_server.listen(port);
         m_server.start_accept();
         m_server.run();
