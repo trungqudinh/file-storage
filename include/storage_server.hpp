@@ -7,13 +7,14 @@
 #include <map>
 #include <regex>
 
+#include <boost/algorithm/string.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <boost/serialization/string.hpp>
-#include <boost/filesystem.hpp>
 
 #include <websocketpp/config/asio.hpp>
 #include <websocketpp/server.hpp>
@@ -255,22 +256,41 @@ private:
     bool on_validate(connection_hdl hdl)
     {
         server::connection_ptr con = m_server.get_con_from_hdl(hdl);
-        std::string path = con->get_resource();
-        auto curr_uri = con->get_uri();
-        if (path.rfind("/client/ws?content-type=audio/x-raw,user_id=") != std::string::npos )
-
+        std::string path = "/client/ws";
+        std::string query = con->get_uri()->get_query();
+        std::vector<std::string> params;
+        boost::split(params, query, boost::is_any_of(","));
+        bool is_valid = true;
+        int expected_params_count = 2;
+        if (path + "?" + query  == con->get_resource())
         {
-            return true;
+            for(const auto& param : params)
+            {
+                if (param == "content-type=audio/x-raw")
+                {
+                    expected_params_count--;
+                }
+                else if (param.rfind("user_id=") != std::string::npos)
+                {
+                    expected_params_count--;
+                }
+                else
+                {
+                    is_valid = false;
+                    break;
+                }
+            }
+            if (is_valid && expected_params_count == 0)
+            {
+                return true;
+            }
         }
-        else
 
-        {
-            log_info("Received invalid URI: " + path);
-            auto ec = websocketpp::error::make_error_code(websocketpp::error::invalid_uri);
-            m_server.send(hdl, "Invalide URI. Try again", websocketpp::frame::opcode::text, ec);
-            m_server.send_http_response(hdl, ec);
-            return false;
-        }
+        log_info("Received invalid URI: " + path);
+        auto ec = websocketpp::error::make_error_code(websocketpp::error::invalid_uri);
+        m_server.send(hdl, "Invalide URI. Try again", websocketpp::frame::opcode::text, ec);
+        m_server.send_http_response(hdl, ec);
+        return false;
     }
 
     context_ptr on_tls_init(websocketpp::connection_hdl hdl)
