@@ -1,7 +1,24 @@
 #pragma once
+#include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
 #include <checksum_handler.hpp>
 #include <cstring>
 #include <jsoncpp/json/json.h>
+
+std::string generator_uuid()
+{
+    static boost::uuids::uuid uuid = boost::uuids::random_generator()();
+    return boost::lexical_cast<std::string>(uuid);
+}
+
+void wait_a_bit()
+{
+     sleep(1);
+}
 
 std::string get_checksum_from_file(const std::string& file_path)
 {
@@ -39,4 +56,10 @@ Json::Value make_json_array(
 template<typename CONTAINER>
 Json::Value make_json_array(const CONTAINER& container) {
     return make_json_array(container, [](const typename CONTAINER::value_type& value){return Json::Value(value);});
+}
+
+bool does_file_exists(const std::string& file_path )
+{
+    struct stat buffer;
+    return (stat(file_path.c_str(), &buffer) == 0)
 }
