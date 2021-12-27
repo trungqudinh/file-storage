@@ -89,6 +89,7 @@ int main(int argc, char **argv)
         endpoint.wait_for_respond(id);
     }
 
-    endpoint.send_file(id, arguments.file_paths);
+//    endpoint.send_file(id, arguments.file_paths);
+    endpoint.send_file_by_chunks(id, arguments.file_paths);
     return 0;
 }

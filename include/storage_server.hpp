@@ -136,9 +136,12 @@ public:
             TransferingPackage received_package = TransferingPackage::deserialize(msg->get_payload());
 
             if (received_package.request_type == "UPLOAD")
-
             {
                 handle_upload_request(hdl, received_package);
+            }
+            else if (received_package.request_type == "STREAMING")
+            {
+                handle_streaming_request(hdl, received_package);
             }
             else if (received_package.request_type == "INFO")
 
@@ -181,22 +184,88 @@ public:
         }
     }
 
-    void handle_upload_request(const connection_hdl& hdl, const TransferingPackage& received_package)
+    void handle_streaming_request(const connection_hdl& hdl, const TransferingPackage& received_package)
+    {
+        StorageHandler storage_handler;
+        storage_handler.storing_path = "data/";
+        storage_handler.mode = std::ios::app;
 
+        log_info("Request id = " + received_package.request_id);
+        log_info("file checksum = " + received_package.file_checksum);
+
+        if (storage_handler.exist(received_package.file_checksum))
+        {
+            log_info("[user_id=" + received_package.user_id + "] File exists. Finished file streaming at " + received_package.file_checksum);
+            m_server.send(hdl, "STREAMING_ON_EXISTING_FILE", websocketpp::frame::opcode::text);
+            m_server.send(hdl, received_package.file_name + " already stored on server!", websocketpp::frame::opcode::text);
+        }
+        else
+        {
+            log_info("prev = " + received_package.previous_checksum);
+            log_info("current = " + received_package.current_checksum);
+            log_info("file = " + received_package.file_checksum);
+            std::pair<string, string> stored_file;
+            if (received_package.previous_checksum == "")
+            {
+                stored_file = storage_handler.store(received_package.current_checksum, received_package.data);
+            }
+            else
+            {
+                stored_file = storage_handler.store(received_package.previous_checksum, received_package.data);
+                stored_file.first = storage_handler.rename(received_package.previous_checksum, received_package.current_checksum).second;
+            }
+            auto stored_file_size = boost::filesystem::file_size(boost::filesystem::path(stored_file.first));
+            bool checksum_matched = (stored_file.second == received_package.file_checksum);
+
+            try
+            {
+                Record rec;
+                rec.user_id = m_connections[hdl].user_id;
+
+                if (checksum_matched)
+                {
+                    rec.request_id = received_package.request_id;
+                    rec.checksum = received_package.file_checksum;
+                    rec.received_date = get_current_time();
+                    rec.file_name = received_package.file_name;
+                    rec.file_size = std::to_string(stored_file_size);
+
+                    DatabaseIOStream& dbs = DatabaseIOStream::Instance();
+                    dbs.initialize();
+                    dbs.insert({rec});
+
+                    log_info("[user_id=" + rec.user_id + "] Finished file streaming at " + stored_file.first);
+                    storage_handler.rename(received_package.current_checksum, stored_file.second);
+                    m_server.send(hdl, "Received successful. File size = " + rec.file_size + " bytes", websocketpp::frame::opcode::text);
+                }
+                else
+                {
+                    log_info("[user_id=" + rec.user_id + "] checksum of file " + stored_file.first + " does not matched");
+                    m_server.send(hdl, "previous_checksum=" + received_package.current_checksum, websocketpp::frame::opcode::text);
+                }
+            } catch (websocketpp::exception const & e)
+            {
+                std::cout << "Echo failed because: "
+                    << "(" << e.what() << ")" << std::endl;
+            }
+        }
+    }
+
+    void handle_upload_request(const connection_hdl& hdl, const TransferingPackage& received_package)
     {
         StorageHandler storage_handler;
         storage_handler.storing_path = "data/";
 
         log_info("Request id = " + received_package.request_id);
 
-        auto const stored_file = storage_handler.store(received_package.checksum, received_package.data, true);
+        auto const stored_file = storage_handler.store(received_package.file_checksum, received_package.data, true);
         auto stored_file_size = boost::filesystem::file_size(boost::filesystem::path(stored_file.first));
-        bool checksum_matched = (stored_file.second == received_package.checksum);
+        bool checksum_matched = (stored_file.second == received_package.file_checksum);
 
         Record rec;
         rec.user_id = m_connections[hdl].user_id;
         rec.request_id = received_package.request_id;
-        rec.checksum = received_package.checksum;
+        rec.checksum = received_package.file_checksum;
         rec.received_date = get_current_time();
         rec.file_name = received_package.file_name;
         rec.file_size = std::to_string(stored_file_size);
@@ -204,7 +273,6 @@ public:
         DatabaseIOStream& dbs = DatabaseIOStream::Instance();
         dbs.initialize();
         dbs.insert({rec});
-
 
         try
         {

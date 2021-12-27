@@ -63,7 +63,6 @@ class ClientEndpoint
         }
 
         void log_info(const std::string& msg)
-
         {
             m_endpoint.get_elog().write(websocketpp::log::elevel::info, msg);
         }
@@ -99,7 +98,6 @@ class ClientEndpoint
             client::connection_ptr con = m_endpoint.get_con_from_hdl(hdl);
             std::cout << "Fail " << con->get_ec().message() << std::endl;
         }
-
 
         int connect(std::string const & uri)
         {
@@ -189,8 +187,20 @@ class ClientEndpoint
             return websocketpp::lib::error_code();
         }
 
-        websocketpp::lib::error_code send_package(int id, TransferingPackage package)
+        std::string parse_user_id(const std::string& query)
+        {
+            std::ostringstream user_id;
+            auto&& it = query.begin();
+            it += query.find("user_id=") + std::string("user_id=").length();
+            for ( ; it != query.end() && *it != ','; ++it)
 
+            {
+                user_id << *it;
+            }
+            return user_id.str();
+        };
+
+        websocketpp::lib::error_code send_package(int id, TransferingPackage package)
         {
             websocketpp::lib::error_code ec;
 
@@ -203,20 +213,6 @@ class ClientEndpoint
 
             const auto hdl = metadata_it->second->get_hdl();
 
-            static auto parse_user_id = [](const std::string& query) -> std::string
-
-            {
-                std::ostringstream user_id;
-                auto&& it = query.begin();
-                it += query.find("user_id=") + std::string("user_id=").length();
-                for ( ; it != query.end() && *it != ','; ++it)
-
-                {
-                    user_id << *it;
-                }
-                return user_id.str();
-            };
-            package.user_id = parse_user_id(m_endpoint.get_con_from_hdl(hdl)->get_uri()->get_query());
             RawDataBuffer sent_data = TransferingPackage::serialize(package);
             std::cout << "> [user_id=" << package.user_id << "] Sending package" << " with size " << sent_data.size() << std::endl;
 
@@ -231,18 +227,36 @@ class ClientEndpoint
             return websocketpp::lib::error_code();
         }
 
-        void send_file(const int& id, std::vector<std::string> file_paths)
+        std::string get_user_id(int id)
+        {
+            con_list::iterator metadata_it = m_connection_list.find(id);
+            if (metadata_it == m_connection_list.end())
+            {
+                std::cerr << "> No connection found with id " << id << std::endl;
+                return "";
+            }
 
+            const auto hdl = metadata_it->second->get_hdl();
+            return parse_user_id(m_endpoint.get_con_from_hdl(hdl)->get_uri()->get_query());
+        }
+
+        void send_file(const int& id, std::vector<std::string> file_paths)
         {
             for (auto const& file : file_paths)
-
             {
                 send_file(id, file);
             }
         }
 
-        void send_file(const int& id, std::string file_path)
+        void send_file_by_chunks(const int& id, std::vector<std::string> file_paths)
+        {
+            for (auto const& file : file_paths)
+            {
+                send_file_by_chunks(id, file);
+            }
+        }
 
+        void send_file(const int& id, std::string file_path)
         {
             boost::trim(file_path);
             struct stat buffer;
@@ -269,13 +283,68 @@ class ClientEndpoint
             fin.close();
 
             TransferingPackage data;
-            data.user_id = "";
+            data.user_id = get_user_id(id);
             data.request_id = generator_uuid();
-            data.checksum = get_checksum_from_file(file_path);
+            data.file_checksum = get_checksum_from_file(file_path);
             data.file_name = boost::filesystem::path(file_path).filename().string();
             data.data = std::move(bytes);
 
             send_package(id, data);
+        }
+
+        void send_file_by_chunks(const int& id, std::string file_path)
+        {
+            boost::trim(file_path);
+            struct stat buffer;
+            if (stat(file_path.c_str(), &buffer) != 0)
+            {
+                log_error("File " + file_path + " does not exist" );
+                return;
+            }
+
+            static const size_t BUFFER_SIZE = 1024 * 1024 * 10;
+            std::string file_checkum = get_checksum_from_file(file_path);
+
+            std::ifstream fin{file_path, std::ios::in | std::ios::binary};
+            std::cout << "Reading:" << file_path << std::endl;
+
+            std::istreambuf_iterator<char> it(fin);
+            std::istreambuf_iterator<char> end;
+
+            TransferingPackage base_package;
+            base_package.request_type = "STREAMING";
+            base_package.user_id = get_user_id(id);
+            base_package.request_id = generator_uuid();
+            base_package.previous_checksum = "";
+            base_package.file_checksum = get_checksum_from_file(file_path);
+            base_package.file_name = boost::filesystem::path(file_path).filename().string();
+
+            std::vector<char> bytes;
+            get_metadata(id)->open_streaming();
+            log_info("Open streaming");
+            int chunk_count = 0;
+            while (it != end && !get_metadata(id)->is_streaming_on_existing_file())
+            {
+                while (it != end && bytes.size() < BUFFER_SIZE)
+                {
+                    bytes.push_back(*it);
+                    ++it;
+                }
+                TransferingPackage chunk = base_package;
+                chunk.data = std::move(bytes);
+//                chunk.previous_checksum = chunk.current_checksum;
+                chunk.current_checksum = get_checksum_from_string(chunk.data);
+
+                log_info("Sending chunk " + std::to_string(chunk_count++) + " " + chunk.current_checksum);
+                send_package(id, chunk);
+
+                bytes.clear();
+                wait_for_message(id, std::string("previous_checksum=") + chunk.current_checksum);
+                base_package.previous_checksum = chunk.current_checksum;
+            }
+            log_info("Close streaming");
+            get_metadata(id)->close_streaming();
+            fin.close();
         }
 
         ConnectionMetadata::ptr get_metadata(int id) const
@@ -290,12 +359,20 @@ class ClientEndpoint
             }
         }
 
-        void wait_for_respond(int id)
-
+        bool wait_for_respond(int id, int remaining_retry = 5)
         {
-            get_metadata(id)->wait_message();
-            while (get_metadata(id)->is_waiting_message())
+            get_metadata(id)->wait_for_next_incomming_message();
+            while (remaining_retry-- && get_metadata(id)->is_waiting_message())
+            {
+                wait_a_bit();
+            }
+            return get_metadata(id)->is_waiting_message();
+        }
 
+        void wait_for_message(int id, const std::string& message, int remaining_retry = 5)
+        {
+            get_metadata(id)->expect_message(message);
+            while (remaining_retry-- && !get_metadata(id)->received_expected_message())
             {
                 wait_a_bit();
             }

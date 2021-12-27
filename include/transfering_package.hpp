@@ -12,7 +12,9 @@ struct TransferingPackage
     std::string request_type = "UPLOAD";
     std::string user_id;
     std::string request_id;
-    std::string checksum;
+    std::string previous_checksum;
+    std::string current_checksum;
+    std::string file_checksum;
     std::string file_name;
     std::vector<char> data;
 
@@ -22,7 +24,9 @@ struct TransferingPackage
         ar & request_type;
         ar & user_id;
         ar & request_id;
-        ar & checksum;
+        ar & previous_checksum;
+        ar & current_checksum;
+        ar & file_checksum;
         ar & file_name;
         ar & data;
     }

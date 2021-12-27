@@ -60,10 +60,18 @@ class ConnectionMetadata
         void on_message(websocketpp::connection_hdl, client::message_ptr msg)
         {
             if (msg->get_opcode() == websocketpp::frame::opcode::TEXT)
-
             {
 //                m_messages.push_back("<< " + msg->get_payload());
+                const std::string& message = msg->get_payload();
                 std::cout << "> [Server respond] \n" << msg->get_payload() << std::endl;
+                if (!received_expected_message())
+                {
+                    received_expected_message_ = (message == expected_waiting_message_);
+                }
+                if (message == "STREAMING_ON_EXISTING_FILE")
+                {
+                    is_streaming_on_existing_file_ = true;
+                }
             }
             else
 
@@ -71,7 +79,7 @@ class ConnectionMetadata
 //                m_messages.push_back("<< " + websocketpp::utility::to_hex(msg->get_payload()));
 //                std::cout << "Received hex from server: " << websocketpp::utility::to_hex(msg->get_payload());
             }
-            waiting_message = false;
+            waiting_for_incomming_message_ = false;
         }
 
         context_ptr on_tls_init(websocketpp::connection_hdl)
@@ -114,23 +122,56 @@ class ConnectionMetadata
             m_messages.push_back(">> " + message);
         }
 
-        void wait_message()
-
+        void wait_for_next_incomming_message(bool keep_waiting = true)
         {
-            waiting_message = true;
+            waiting_for_incomming_message_ = keep_waiting;
+        }
+
+        void expect_message(const std::string& message, bool keep_waiting = true)
+        {
+            received_expected_message_ = !keep_waiting;
+            if (!received_expected_message_)
+            {
+                expected_waiting_message_ = message;
+            }
         }
 
         bool is_waiting_message()
-
         {
-            return waiting_message;
+            return waiting_for_incomming_message_;
+        }
+
+        bool received_expected_message()
+        {
+            return received_expected_message_;
+        }
+
+        bool is_streaming_on_existing_file()
+        {
+            return is_streaming_on_existing_file_;
+        }
+
+        void open_streaming()
+        {
+            is_streaming = true;
+        }
+
+        void close_streaming()
+        {
+            is_streaming = false;
+            is_streaming_on_existing_file_ = false;
         }
 
         friend std::ostream & operator<< (std::ostream & out, ConnectionMetadata const & data);
     private:
         int m_id;
         websocketpp::connection_hdl m_hdl;
-        bool waiting_message = false;
+        bool waiting_for_incomming_message_ = false;
+        bool received_expected_message_ = true;
+        bool server_accept_sreaming = true;
+        bool is_streaming = false;
+        bool is_streaming_on_existing_file_ = false;
+        std::string expected_waiting_message_ = "";
         std::string m_status;
         std::string m_uri;
         std::string m_server;

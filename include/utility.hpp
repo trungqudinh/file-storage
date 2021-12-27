@@ -27,6 +27,13 @@ std::string get_checksum_from_file(const std::string& file_path)
     return std::string(checksum);
 }
 
+std::string get_checksum_from_string(const std::vector<char>& input)
+{
+    char checksum[65];
+    sha256_string(input.data(), input.size(), checksum);
+    return std::string(checksum);
+}
+
 std::string get_current_time()
 {
     time_t rawtime;
