@@ -63,15 +63,23 @@ int main(int argc, char **argv)
     // ================     Connect      ================
     if (-1 == id)
     {
-        std::cerr << "Fail to connect to " << arguments.uri << std::endl;
+        std::cerr << "Fail to initialize new connection"  << std::endl;
         return 1;
     }
-    std::cout << "> Created connection with uri " + arguments.uri + " id = " + std::to_string(id) << std::endl;
+    std::cout << "> Start connecting to uri " + arguments.uri + " id = " + std::to_string(id) << std::endl;
     ConnectionMetadata::ptr metadata = endpoint.get_metadata(id);
-    while (metadata->get_status() != "Open")
+    int remaining_retry = 5;
+    while (remaining_retry-- && metadata->get_status() == "Connecting")
     {
         wait_a_bit();
     }
+
+    if (metadata->get_status() != "Open")
+    {
+        std::cerr << "> Fail to connect to " << arguments.uri << std::endl;
+        return 1;
+    }
+
     std::cout << *(endpoint.get_metadata(id)) << std::endl;
 
     // ================ Handle arguments ================
