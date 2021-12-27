@@ -58,8 +58,8 @@ Json::Value make_json_array(const CONTAINER& container) {
     return make_json_array(container, [](const typename CONTAINER::value_type& value){return Json::Value(value);});
 }
 
-bool does_file_exists(const std::string& file_path )
+bool does_file_exist(const std::string& file_path )
 {
     struct stat buffer;
-    return (stat(file_path.c_str(), &buffer) == 0)
+    return (stat(file_path.c_str(), &buffer) == 0);
 }
