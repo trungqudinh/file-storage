@@ -33,10 +33,11 @@ public:
         return instance;
     }
 
-    void initialize()
+    void initialize(const std::string& database_file)
     {
         if (!is_open)
         {
+            database_file_name = database_file;
             fout_.open(database_file_name, std::ios_base::app);
             is_open = true;
         }

@@ -46,6 +46,7 @@ struct ConnectionData
 class StorageServer
 {
 public:
+    std::string storing_path = "data/";
     StorageServer() : m_next_sessionid(1)
     {
         m_server.set_error_channels(websocketpp::log::elevel::all);
@@ -187,7 +188,7 @@ public:
     void handle_streaming_request(const connection_hdl& hdl, const TransferingPackage& received_package)
     {
         StorageHandler storage_handler;
-        storage_handler.storing_path = "data/";
+        storage_handler.storing_path = storing_path;
         storage_handler.mode = std::ios::app;
 
         log_info("Request id = " + received_package.request_id);
@@ -231,7 +232,6 @@ public:
                     rec.file_size = std::to_string(stored_file_size);
 
                     DatabaseIOStream& dbs = DatabaseIOStream::Instance();
-                    dbs.initialize();
                     dbs.insert({rec});
 
                     log_info("[user_id=" + rec.user_id + "] Finished file streaming at " + stored_file.first);
@@ -254,7 +254,7 @@ public:
     void handle_upload_request(const connection_hdl& hdl, const TransferingPackage& received_package)
     {
         StorageHandler storage_handler;
-        storage_handler.storing_path = "data/";
+        storage_handler.storing_path = storing_path;;
 
         log_info("Request id = " + received_package.request_id);
 
@@ -271,7 +271,6 @@ public:
         rec.file_size = std::to_string(stored_file_size);
 
         DatabaseIOStream& dbs = DatabaseIOStream::Instance();
-        dbs.initialize();
         dbs.insert({rec});
 
         try
@@ -394,6 +393,7 @@ private:
         }
         return ctx;
     }
+
 
 private:
     typedef std::map<connection_hdl,ConnectionData,std::owner_less<connection_hdl>> con_list;
