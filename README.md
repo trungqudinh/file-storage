@@ -1,3 +1,17 @@
+## Quick tour
+
+We can run the `./install.sh` script to start from building to deploying steps
+
+Here the short content in `./install.sh`
+
+```
+sudo apt-get install libssl-dev libboost-all-dev -y
+sudo apt-get install devscripts build-essential lintian dh-make -y
+git clone https://github.com/zaphoyd/websocketpp.git
+make deb &&  sudo dpkg -i ../storage-server_1.0_amd64.deb
+sudo dpkg -i ../storage-client_1.0_amd64.deb
+```
+
 ## Building source code
 
 - First, we need to clone the Websocket++ library repository to this top repo
@@ -11,7 +25,6 @@ git clone https://github.com/zaphoyd/websocketpp.git
 ```
 sudo apt-get install libssl-dev libboost-all-dev libjsoncpp-dev -y
 ``` 
-
 
 - Then run with make command.
 ```
@@ -31,7 +44,9 @@ build/
 
 ### Server
 
-- Create the *data/* directory with same level of the binary file. To run the server we use:
+- Create the *data/* directory with same level of the binary file. Anh not to place an SSL Keychain file in the place to call the command.
+
+To run the server we use:
 
   > ./build/server <PORT> <FILE_STORING_PATH> <DATABASE_FILE_NAME>
  
@@ -93,6 +108,15 @@ Example output of `--files` option:
             ]
         ]
     }
+
+## Build debian package
+
+We can build debian package for fast installation and easier to install on other machine
+```
+make deb 
+sudo dpkg -i ../storage-server_1.0_amd64.deb
+sudo dpkg -i ../storage-client_1.0_amd64.deb
+```
 
 
 ## How does they work?
