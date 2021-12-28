@@ -1,0 +1,15 @@
+Source: storage-server
+Section: base
+Priority: extra
+Maintainer: trung.qu.dinh <trung.qu.dinh@gmail.com>
+Build-Depends:
+ debhelper (>= 7.0.50~)
+Standards-Version: 3.8.4
+
+Package: storage-server
+Architecture: any
+Description: Sever to received file from client
+
+Package: storage-client
+Architecture: any
+Description: Client to send large file to server

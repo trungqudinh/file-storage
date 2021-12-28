@@ -1,0 +1,4 @@
+build/server /var/lib/storage-server
+bin/* /var/lib/storage-server
+server.pem /var/lib/storage-server
+debian/storage-server.service  /lib/systemd/system/

@@ -1,0 +1,21 @@
+[Unit]
+Description=storage-server
+After=network.target
+OnFailure=failure-mailer@%i.service
+
+[Service]
+Environment="user=root"
+Type=simple
+LimitNOFILE=65000
+ExecStart=/bin/bash -c /var/lib/storage-server/server 9002 /var/lib/storage-server/data/  /var/lib/storage-server/database.db >> /var/lib/storage-server/storage-server.log 2>&1
+ExecReload=/bin/kill -15 $MAINPID
+KillMode=process
+Restart=always
+RestartSec=60
+StartLimitBurst=1000
+User=context
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
